@@ -2,8 +2,16 @@
 
 Integration testing of voting process.
 
-## Usage
-1. Download [GeckoDriver](https://github.com/mozilla/geckodriver/releases) locally
-2. Set up ENV variable GECKODRIVER_PATH
-3. Build all electie services ([vt](https://github.com/tp17-2021/vt), [gateway](https://github.com/tp17-2021/gateway), [server](https://github.com/tp17-2021/server)) locally
-4. Run test: python tests.py
+## Dependencies
+- python-dotenv
+- requests
+- selenium
+- webdriver_manager
+
+## Build all electie services locally
+- [Voting terminal](https://github.com/tp17-2021/vt)
+- [Gateway](https://github.com/tp17-2021/gateway)
+- [Server](https://github.com/tp17-2021/server)
+
+## Run tests 
+`python tests.py`
