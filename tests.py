@@ -26,10 +26,10 @@ driver_options.add_argument("--disable-blink-features=AutomationControlled")
 # Load environment variables
 load_dotenv()
 PAGE_LOAD_DELAY = os.getenv("PAGE_LOAD_DELAY") # seconds
-VT_FRONTEND_URL = os.getenv('VT_URL') + "frontend/"
-VT_BACKEND_URL = os.getenv('VT_URL') + "backend/"
+VT_FRONTEND_URL = os.getenv("VT_URL") + "frontend/"
+VT_BACKEND_URL = os.getenv("VT_URL") + "backend/"
 GATEWAY_URL = os.getenv("GATEWAY_URL")
-GATEWAY_ADMIN_URL = os.getenv("GATEWAY_URL") + 'admin-frontend/'
+GATEWAY_ADMIN_URL = os.getenv("GATEWAY_URL") + "admin-frontend/"
 SERVER_URL = os.getenv("SERVER_URL")
 
 all_votes_count = 0
@@ -79,13 +79,11 @@ class ServicesAvailabityTest (unittest.TestCase):
         except requests.exceptions.HTTPError as e:
             raise SystemExit("SERVER not available!")
 
-        response = requests.post(SERVER_URL + 'database/seed-data', json = {"number_of_votes": 1})
-        # self.passing = self.assertEqual(200, response.status_code)
-
+        requests.post(SERVER_URL + "database/seed-data", json = {"number_of_votes": 1})
 
 
 class VotingTest (unittest.TestCase):
-    INSERT_TOKEN_IMAGE_PATH= '/frontend/img/icons/insert.png'
+    INSERT_TOKEN_IMAGE_PATH= "/frontend/img/icons/insert.png"
 
     def setUp (self):
         self.driver = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = driver_options)
@@ -104,20 +102,19 @@ class VotingTest (unittest.TestCase):
     def turnOnElectionsIfNotOn (self):
         driver = self.driver
 
-        driver.get(GATEWAY_ADMIN_URL + 'home/elections')
+        driver.get(GATEWAY_ADMIN_URL + "home/elections")
         find_element(driver, "//main", by = By.XPATH)
 
         # Enter PIN
-        if is_text_present(driver, 'Zadajte pin'):
+        if is_text_present(driver, "Zadajte pin"):
             self.enter_gateway_pin()
 
-        wait_for_redirect(driver, GATEWAY_ADMIN_URL + 'home')
+        wait_for_redirect(driver, GATEWAY_ADMIN_URL + "home")
 
         # Click on Elections menu
         element = find_clickable_element(driver, "//button[text()='Voľby']", by = By.XPATH)
         click_on(driver, element)
 
-        # wait_for_redirect(driver, GATEWAY_ADMIN_URL + 'home/elections')
         find_element(driver, "//main", by = By.XPATH)
 
         # Turn elections on
@@ -128,7 +125,7 @@ class VotingTest (unittest.TestCase):
         else:
             self.assertTrue(is_text_present(driver, "Voľby spustené"))
 
-        response = requests.get(VT_BACKEND_URL + 'test_election_start')
+        response = requests.get(VT_BACKEND_URL + "test_election_start")
         self.passing = self.assertEqual(200, response.status_code)
 
 
@@ -175,7 +172,7 @@ class VotingTest (unittest.TestCase):
     #     unsynchronized_votes_count += 1
 
     #     # Check if vote is saved in gateway
-    #     response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
     #     statistics_result = response.json()
 
     #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -183,14 +180,14 @@ class VotingTest (unittest.TestCase):
     #     self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
     #     # Synchronize votes in gateway with server
-    #     response = requests.post(GATEWAY_URL + 'synchronization-service-api/synchronize')
+    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/synchronize")
     #     self.assertEqual(200, response.status_code)
 
     #     unsynchronized_votes_count -= 1
     #     synchronized_votes_count += 1
 
     #     # Check if vote is marked as synchronized
-    #     response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
     #     statistics_result = response.json()
 
     #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -258,7 +255,7 @@ class VotingTest (unittest.TestCase):
         unsynchronized_votes_count += 1
 
         # Check if vote is saved in gateway
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -266,14 +263,14 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Synchronize votes in gateway with server
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/synchronize')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/synchronize")
         self.assertEqual(200, response.status_code)
 
         unsynchronized_votes_count -= 1
         synchronized_votes_count += 1
 
         # Check if vote is marked as synchronized
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -365,7 +362,7 @@ class VotingTest (unittest.TestCase):
         unsynchronized_votes_count += 1
 
         # Check if vote is saved in gateway
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -373,14 +370,14 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Synchronize votes in gateway with server
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/synchronize')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/synchronize")
         self.assertEqual(200, response.status_code)
 
         unsynchronized_votes_count -= 1
         synchronized_votes_count += 1
 
         # Check if vote is marked as synchronized
-        response = requests.post(GATEWAY_URL + 'synchronization-service-api/statistics')
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
