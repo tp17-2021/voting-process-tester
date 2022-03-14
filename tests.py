@@ -32,6 +32,8 @@ GATEWAY_URL = os.getenv("GATEWAY_URL")
 GATEWAY_ADMIN_URL = os.getenv("GATEWAY_URL") + "admin-frontend/"
 SERVER_URL = os.getenv("SERVER_URL")
 
+SYNCHRONIZATION_MESSAGE = "1 votes were successfully synchronized"
+
 all_votes_count = 0
 synchronized_votes_count = 0
 unsynchronized_votes_count = 0
@@ -79,7 +81,7 @@ class ServicesAvailabityTest (unittest.TestCase):
         except requests.exceptions.HTTPError as e:
             raise SystemExit("SERVER not available!")
 
-        requests.post(SERVER_URL + "database/seed-data", json = {"number_of_votes": 1})
+        response = requests.post(SERVER_URL + "database/import-data")
 
 
 class VotingTest (unittest.TestCase):
@@ -129,15 +131,13 @@ class VotingTest (unittest.TestCase):
         self.passing = self.assertEqual(200, response.status_code)
 
 
-    # # TODO when server ready to accept null party ID:
-    # #   uncomment
-    # #   update count of votes in other tests
-
+    # TODO uncomment when server ready to accept null party ID
+    #
     # def test_select_none (self):
     #     global all_votes_count
     #     global synchronized_votes_count
     #     global unsynchronized_votes_count
-    #
+
     #     driver = self.driver
 
     #     # Send validated token
@@ -153,7 +153,7 @@ class VotingTest (unittest.TestCase):
     #     element = find_clickable_element(driver, "//button[text()='Potvrdiť']", by = By.XPATH)
     #     click_on(driver, element)
 
-    #     # # Confirm sending vote with no selection
+    #     # Confirm sending vote with no selection
     #     self.assertTrue(is_text_present(driver, "Naozaj chcete odoslať prázdny hlas?"))
     #     element = find_clickable_element(driver, "//button[text()='Odoslať prázdny hlas']", by = By.XPATH)
     #     click_on(driver, element)
@@ -173,6 +173,7 @@ class VotingTest (unittest.TestCase):
 
     #     # Check if vote is saved in gateway
     #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+    #     self.assertEqual(200, response.status_code)
     #     statistics_result = response.json()
 
     #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -188,13 +189,24 @@ class VotingTest (unittest.TestCase):
 
     #     # Check if vote is marked as synchronized
     #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+    #     self.assertEqual(200, response.status_code)
     #     statistics_result = response.json()
 
     #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
     #     self.assertTrue(statistics_result["statistics"]["syncronized_count"] == synchronized_votes_count)
     #     self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
-    #     # Check server statistics
+    #     # # Check server statistics
+    #     # response = requests.get(SERVER_URL + "elastic/elections-status")
+    #     # election_status = response.json()
+
+    #     # self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+
+    #     # # Do elastic search synchronize
+    #     # response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
+    #     # synchronize_response = response.json()
+
+    #     # self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
 
 
     def test_selecting_party_only (self):
@@ -240,7 +252,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Pokračovať']", by = By.XPATH)
         click_on(driver, element)
 
-        # Warning of no selection
+        # Warning of no candidate selected
         find_element(driver, "//h2[text()='Zvolená strana']", by = By.XPATH)
         self.assertTrue(is_text_present(driver, "SME RODINA"))
         self.assertTrue(is_text_present(driver, "Nezvolili ste žiadneho kandidáta"))
@@ -256,6 +268,7 @@ class VotingTest (unittest.TestCase):
 
         # Check if vote is saved in gateway
         response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -271,6 +284,7 @@ class VotingTest (unittest.TestCase):
 
         # Check if vote is marked as synchronized
         response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -278,6 +292,16 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Check server statistics
+        response = requests.get(SERVER_URL + "elastic/elections-status")
+        election_status = response.json()
+
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+
+        # Do elastic search synchronize
+        response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
+        synchronize_response = response.json()
+
+        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
 
 
     def test_selecting_party_and_candidates (self):
@@ -314,7 +338,7 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "//span[text()='Meno']", by = By.XPATH)
         self.assertTrue(is_text_present(driver, "1. Boris Kollár"))
 
-         # Select candidates
+        # Select candidates
         element = find_clickable_element(driver, "(//input[@type='checkbox'])[1]", by = By.XPATH)
         click_on(driver, element)
 
@@ -345,7 +369,6 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Pokračovať']", by = By.XPATH)
         click_on(driver, element)
 
-        # Warning of no selection
         find_element(driver, "//h2[text()='Zvolená strana']", by = By.XPATH)
         self.assertTrue(is_text_present(driver, "SME RODINA"))
         self.assertTrue(is_text_present(driver, "Zvolení kandidáti na poslancov"))
@@ -363,6 +386,7 @@ class VotingTest (unittest.TestCase):
 
         # Check if vote is saved in gateway
         response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -378,6 +402,7 @@ class VotingTest (unittest.TestCase):
 
         # Check if vote is marked as synchronized
         response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
         statistics_result = response.json()
 
         self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
@@ -385,6 +410,18 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Check server statistics
+        response = requests.get(SERVER_URL + "elastic/elections-status")
+        self.assertEqual(200, response.status_code)
+        election_status = response.json()
+
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+
+        # Do elastic search synchronize
+        response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
+        self.assertEqual(200, response.status_code)
+        synchronize_response = response.json()
+
+        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
 
 
     def tearDown (self):
