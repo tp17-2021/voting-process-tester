@@ -131,82 +131,80 @@ class VotingTest (unittest.TestCase):
         self.passing = self.assertEqual(200, response.status_code)
 
 
-    # TODO uncomment when server ready to accept null party ID
-    #
-    # def test_select_none (self):
-    #     global all_votes_count
-    #     global synchronized_votes_count
-    #     global unsynchronized_votes_count
+    def test_select_none (self):
+        global all_votes_count
+        global synchronized_votes_count
+        global unsynchronized_votes_count
 
-    #     driver = self.driver
+        driver = self.driver
 
-    #     # Send validated token
-    #     response = requests.get(VT_BACKEND_URL + "/test_token_valid")
-    #     self.passing = self.assertEqual(200, response.status_code)
+        # Send validated token
+        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        self.passing = self.assertEqual(200, response.status_code)
 
-    #     # Get candidating parties
-    #     driver.get(VT_FRONTEND_URL + "parliament/party")
+        # Get candidating parties
+        driver.get(VT_FRONTEND_URL + "parliament/party")
 
-    #     find_element(driver, "//h2[text()='Kandidujúce strany:']", by = By.XPATH)
+        find_element(driver, "//h2[text()='Kandidujúce strany:']", by = By.XPATH)
 
-    #     # Decide for no party
-    #     element = find_clickable_element(driver, "//button[text()='Potvrdiť']", by = By.XPATH)
-    #     click_on(driver, element)
+        # Decide for no party
+        element = find_clickable_element(driver, "//button[text()='Potvrdiť']", by = By.XPATH)
+        click_on(driver, element)
 
-    #     # Confirm sending vote with no selection
-    #     self.assertTrue(is_text_present(driver, "Naozaj chcete odoslať prázdny hlas?"))
-    #     element = find_clickable_element(driver, "//button[text()='Odoslať prázdny hlas']", by = By.XPATH)
-    #     click_on(driver, element)
+        # Confirm sending vote with no selection
+        self.assertTrue(is_text_present(driver, "Naozaj chcete odoslať prázdny hlas?"))
+        element = find_clickable_element(driver, "//button[text()='Odoslať prázdny hlas']", by = By.XPATH)
+        click_on(driver, element)
 
-    #     # Warning of no selection
-    #     find_element(driver, "//div[text()='Nezvolili ste žiadnu politickú stranu']", by = By.XPATH)
-    #     find_element(driver, "//div[text()='Nezvolili ste žiadneho kandidáta']", by = By.XPATH)
+        # Warning of no selection
+        find_element(driver, "//div[text()='Nezvolili ste žiadnu politickú stranu']", by = By.XPATH)
+        find_element(driver, "//div[text()='Nezvolili ste žiadneho kandidáta']", by = By.XPATH)
 
-    #     # Send vote
-    #     element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
-    #     click_on(driver, element)
+        # Send vote
+        element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
+        click_on(driver, element)
 
-    #     find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH)
 
-    #     all_votes_count += 1
-    #     unsynchronized_votes_count += 1
+        all_votes_count += 1
+        unsynchronized_votes_count += 1
 
-    #     # Check if vote is saved in gateway
-    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
-    #     self.assertEqual(200, response.status_code)
-    #     statistics_result = response.json()
+        # Check if vote is saved in gateway
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
+        statistics_result = response.json()
 
-    #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
-    #     self.assertTrue(statistics_result["statistics"]["syncronized_count"] == synchronized_votes_count)
-    #     self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
+        self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
+        self.assertTrue(statistics_result["statistics"]["syncronized_count"] == synchronized_votes_count)
+        self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
-    #     # Synchronize votes in gateway with server
-    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/synchronize")
-    #     self.assertEqual(200, response.status_code)
+        # Synchronize votes in gateway with server
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/synchronize")
+        self.assertEqual(200, response.status_code)
 
-    #     unsynchronized_votes_count -= 1
-    #     synchronized_votes_count += 1
+        unsynchronized_votes_count -= 1
+        synchronized_votes_count += 1
 
-    #     # Check if vote is marked as synchronized
-    #     response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
-    #     self.assertEqual(200, response.status_code)
-    #     statistics_result = response.json()
+        # Check if vote is marked as synchronized
+        response = requests.post(GATEWAY_URL + "synchronization-service-api/statistics")
+        self.assertEqual(200, response.status_code)
+        statistics_result = response.json()
 
-    #     self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
-    #     self.assertTrue(statistics_result["statistics"]["syncronized_count"] == synchronized_votes_count)
-    #     self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
+        self.assertTrue(statistics_result["statistics"]["all_count"] == all_votes_count)
+        self.assertTrue(statistics_result["statistics"]["syncronized_count"] == synchronized_votes_count)
+        self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
-    #     # # Check server statistics
-    #     # response = requests.get(SERVER_URL + "elastic/elections-status")
-    #     # election_status = response.json()
+        # Check server statistics
+        response = requests.get(SERVER_URL + "elastic/elections-status")
+        election_status = response.json()
 
-    #     # self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
 
-    #     # # Do elastic search synchronize
-    #     # response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
-    #     # synchronize_response = response.json()
+        # Do elastic search synchronize
+        response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
+        synchronize_response = response.json()
 
-    #     # self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
+        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
 
 
     def test_selecting_party_only (self):
