@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import unittest
 import requests
 from dotenv import load_dotenv
@@ -23,6 +24,7 @@ driver_options.add_argument("--disable-gpu")
 driver_options.add_argument("--enable-javascript")
 driver_options.add_argument("--disable-blink-features=AutomationControlled")
 
+
 # Load environment variables
 load_dotenv()
 PAGE_LOAD_DELAY = os.getenv("PAGE_LOAD_DELAY") # seconds
@@ -34,9 +36,26 @@ SERVER_URL = os.getenv("SERVER_URL")
 
 SYNCHRONIZATION_MESSAGE = "1 votes were successfully synchronized"
 
+elections_on = False
+vt_registration_on = False
+
 all_votes_count = 0
 synchronized_votes_count = 0
 unsynchronized_votes_count = 0
+
+
+
+def set_up_server ():
+    # Do import
+    response = requests.post(SERVER_URL + "database/import-data")
+
+    # Seed data
+    response = requests.post(SERVER_URL + "database/seed-data?number_of_votes=1")
+
+    # Set up elastic
+    response = requests.post(SERVER_URL + "elastic/setup-elastic-vote-index")
+
+
 
 class ServicesAvailabityTest (unittest.TestCase):
     def test_vt_frontend_available (self):
@@ -45,13 +64,6 @@ class ServicesAvailabityTest (unittest.TestCase):
             self.passing = self.assertEqual(200, response.status_code)
         except requests.exceptions.HTTPError as e:
             raise SystemExit("VT frontend not available!")
-
-    def test_vt_backend_available (self):
-        try:
-            response = requests.get(VT_BACKEND_URL)
-            self.passing = self.assertEqual(200, response.status_code)
-        except requests.exceptions.HTTPError as e:
-            raise SystemExit("VT backend not available!")
 
     def test_gateway_voting_service_available (self):
         try:
@@ -81,15 +93,27 @@ class ServicesAvailabityTest (unittest.TestCase):
         except requests.exceptions.HTTPError as e:
             raise SystemExit("SERVER not available!")
 
-        response = requests.post(SERVER_URL + "database/import-data")
+        # Set up server if everything OK
+        set_up_server()
+
 
 
 class VotingTest (unittest.TestCase):
     INSERT_TOKEN_IMAGE_PATH= "/frontend/img/icons/insert.png"
 
     def setUp (self):
+        global vt_registration_on
+        global elections_on
+
         self.driver = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = driver_options)
-        self.turnOnElectionsIfNotOn()
+
+        if not vt_registration_on:
+            self.turn_on_vt_registration()
+            vt_registration_on = True
+
+        if not elections_on:
+            self.turn_on_elections_if_not_on()
+            elections_on = True
 
 
     def enter_gateway_pin (self):
@@ -100,16 +124,44 @@ class VotingTest (unittest.TestCase):
         for i in range(4):
             click_on(driver, element)
 
+    def turn_on_vt_registration (self):
+        driver = self.driver
 
-    def turnOnElectionsIfNotOn (self):
+        driver.get(GATEWAY_ADMIN_URL + "home/terminals")
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Enter PIN
+        self.enter_gateway_pin()
+
+        wait_for_redirect(driver, GATEWAY_ADMIN_URL + "home")
+
+        # Click on VT menu
+        element = find_clickable_element(driver, "//button[text()='Volebné terminaly']", by = By.XPATH)
+        click_on(driver, element)
+
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Turn registration on
+        find_element(driver, "registration-state", by = By.ID)
+
+        # Wait for status update
+        time.sleep(3)
+
+        if not is_text_present(driver, "Registrácia spustená."):
+            element = find_clickable_element(driver, "//button[text()='Spustiť registráciu']", by = By.XPATH)
+            click_on(driver, element)
+
+        find_element(driver, "//div[text()='Registrácia spustená.']", by = By.XPATH)
+        # self.assertTrue(is_text_present(driver, "//button[text()='Registrácia spustená.']"))
+
+    def turn_on_elections_if_not_on (self):
         driver = self.driver
 
         driver.get(GATEWAY_ADMIN_URL + "home/elections")
         find_element(driver, "//main", by = By.XPATH)
 
         # Enter PIN
-        if is_text_present(driver, "Zadajte pin"):
-            self.enter_gateway_pin()
+        self.enter_gateway_pin()
 
         wait_for_redirect(driver, GATEWAY_ADMIN_URL + "home")
 
@@ -120,12 +172,12 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "//main", by = By.XPATH)
 
         # Turn elections on
-        if is_text_present(driver, "Voľby nespustené"):
+        find_element(driver, "election-state", by = By.ID)
+        if not is_text_present(driver, "Voľby spustené."):
             element = find_clickable_element(driver, "//button[text()='Spustiť voľby']", by = By.XPATH)
             click_on(driver, element)
 
-        else:
-            self.assertTrue(is_text_present(driver, "Voľby spustené"))
+        find_element(driver, "//div[text()='Voľby spustené.']", by = By.XPATH)
 
         response = requests.get(VT_BACKEND_URL + "test_election_start")
         self.passing = self.assertEqual(200, response.status_code)
@@ -138,8 +190,12 @@ class VotingTest (unittest.TestCase):
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -214,8 +270,12 @@ class VotingTest (unittest.TestCase):
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -309,8 +369,12 @@ class VotingTest (unittest.TestCase):
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -424,6 +488,8 @@ class VotingTest (unittest.TestCase):
 
     def tearDown (self):
         self.driver.close()
+
+
 
 if __name__ == "__main__":
     # Exit if any fail
