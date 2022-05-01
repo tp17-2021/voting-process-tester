@@ -144,7 +144,7 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "registration-state", by = By.ID)
 
         # Wait for status update
-        time.sleep(10)
+        time.sleep(2)
 
         if not is_text_present(driver, "Registrácia spustená."):
             element = find_clickable_element(driver, "//button[text()='Spustiť registráciu']", by = By.XPATH)
@@ -173,7 +173,7 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "election-state", by = By.ID)
 
         # Wait for status update
-        time.sleep(10)
+        time.sleep(2)
 
         if not is_text_present(driver, "Voľby spustené."):
             element = find_clickable_element(driver, "//button[text()='Spustiť voľby']", by = By.XPATH)
@@ -198,6 +198,12 @@ class VotingTest (unittest.TestCase):
         response = requests.post(GATEWAY_URL + 'token-manager-api/tokens/writer/update', json = {"token": token})
         self.passing = self.assertEqual(200, response.status_code)
 
+        # Wait for FE to be ready
+        time.sleep(20)
+        driver.get(VT_FRONTEND_URL)
+        find_element(driver, "//div[text()='Načítajte NFC tag']", by = By.XPATH)
+
+        # Use token
         response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
