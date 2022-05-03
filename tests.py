@@ -229,7 +229,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, delay = 6)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1
@@ -333,7 +333,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, delay = 6)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1
@@ -460,7 +460,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, delay = 6)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1

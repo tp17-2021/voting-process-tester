@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 
 load_dotenv()
 PAGE_LOAD_DELAY = os.getenv("PAGE_LOAD_DELAY") # seconds
+PAGE_LONG_LOAD_DELAY = os.getenv("PAGE_LONG_LOAD_DELAY") # seconds
 
 def is_text_present (driver, text):
     return str(text) in driver.page_source
@@ -14,7 +15,8 @@ def is_text_present (driver, text):
 def click_on (driver, element):
     driver.execute_script("arguments[0].click();", element)
 
-def find_element (driver, identifier, by = By.CLASS_NAME, delay = PAGE_LOAD_DELAY):
+def find_element (driver, identifier, by = By.CLASS_NAME, longDelay = False):
+    delay = PAGE_LONG_LOAD_DELAY if longDelay else PAGE_LOAD_DELAY
     WebDriverWait(driver, delay).until(EC.presence_of_element_located((by, identifier)))
 
 def find_clickable_element (driver, identifier, by = By.CLASS_NAME):
