@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import unittest
 import requests
 from dotenv import load_dotenv
@@ -32,11 +33,28 @@ GATEWAY_URL = os.getenv("GATEWAY_URL")
 GATEWAY_ADMIN_URL = os.getenv("GATEWAY_URL") + "admin-frontend/"
 SERVER_URL = os.getenv("SERVER_URL")
 
-SYNCHRONIZATION_MESSAGE = "1 votes were successfully synchronized"
+SYNCHRONIZATION_MESSAGE = "votes were successfully synchronized"
+
+elections_on = False
+vt_registration_on = False
 
 all_votes_count = 0
 synchronized_votes_count = 0
 unsynchronized_votes_count = 0
+
+
+
+def set_up_server ():
+    # Do import
+    response = requests.post(SERVER_URL + "database/import-data")
+
+    # Seed data
+    response = requests.post(SERVER_URL + "database/seed-data?number_of_votes=1")
+
+    # Set up elastic
+    response = requests.post(SERVER_URL + "elastic/setup-elastic-vote-index")
+
+
 
 class ServicesAvailabityTest (unittest.TestCase):
     def test_vt_frontend_available (self):
@@ -45,13 +63,6 @@ class ServicesAvailabityTest (unittest.TestCase):
             self.passing = self.assertEqual(200, response.status_code)
         except requests.exceptions.HTTPError as e:
             raise SystemExit("VT frontend not available!")
-
-    def test_vt_backend_available (self):
-        try:
-            response = requests.get(VT_BACKEND_URL)
-            self.passing = self.assertEqual(200, response.status_code)
-        except requests.exceptions.HTTPError as e:
-            raise SystemExit("VT backend not available!")
 
     def test_gateway_voting_service_available (self):
         try:
@@ -81,15 +92,27 @@ class ServicesAvailabityTest (unittest.TestCase):
         except requests.exceptions.HTTPError as e:
             raise SystemExit("SERVER not available!")
 
-        response = requests.post(SERVER_URL + "database/import-data")
+        # Set up server if everything OK
+        set_up_server()
+
 
 
 class VotingTest (unittest.TestCase):
     INSERT_TOKEN_IMAGE_PATH= "/frontend/img/icons/insert.png"
 
     def setUp (self):
+        global vt_registration_on
+        global elections_on
+
         self.driver = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = driver_options)
-        self.turnOnElectionsIfNotOn()
+
+        if not vt_registration_on:
+            self.turn_on_vt_registration()
+            vt_registration_on = True
+
+        if not elections_on:
+            self.turn_on_elections_if_not_on()
+            elections_on = True
 
 
     def enter_gateway_pin (self):
@@ -100,16 +123,43 @@ class VotingTest (unittest.TestCase):
         for i in range(4):
             click_on(driver, element)
 
+    def turn_on_vt_registration (self):
+        driver = self.driver
 
-    def turnOnElectionsIfNotOn (self):
+        driver.get(GATEWAY_ADMIN_URL + "home/terminals")
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Enter PIN
+        self.enter_gateway_pin()
+
+        wait_for_redirect(driver, GATEWAY_ADMIN_URL + "home")
+
+        # Click on VT menu
+        element = find_clickable_element(driver, "//button[text()='Volebné terminaly']", by = By.XPATH)
+        click_on(driver, element)
+
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Turn registration on
+        find_element(driver, "registration-state", by = By.ID)
+
+        # Wait for status update
+        time.sleep(2)
+
+        if not is_text_present(driver, "Registrácia spustená."):
+            element = find_clickable_element(driver, "//button[text()='Spustiť registráciu']", by = By.XPATH)
+            click_on(driver, element)
+
+        find_element(driver, "//div[text()='Registrácia spustená.']", by = By.XPATH)
+
+    def turn_on_elections_if_not_on (self):
         driver = self.driver
 
         driver.get(GATEWAY_ADMIN_URL + "home/elections")
         find_element(driver, "//main", by = By.XPATH)
 
         # Enter PIN
-        if is_text_present(driver, "Zadajte pin"):
-            self.enter_gateway_pin()
+        self.enter_gateway_pin()
 
         wait_for_redirect(driver, GATEWAY_ADMIN_URL + "home")
 
@@ -120,15 +170,16 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "//main", by = By.XPATH)
 
         # Turn elections on
-        if is_text_present(driver, "Voľby nespustené"):
+        find_element(driver, "election-state", by = By.ID)
+
+        # Wait for status update
+        time.sleep(2)
+
+        if not is_text_present(driver, "Voľby spustené."):
             element = find_clickable_element(driver, "//button[text()='Spustiť voľby']", by = By.XPATH)
             click_on(driver, element)
 
-        else:
-            self.assertTrue(is_text_present(driver, "Voľby spustené"))
-
-        response = requests.get(VT_BACKEND_URL + "test_election_start")
-        self.passing = self.assertEqual(200, response.status_code)
+        find_element(driver, "//div[text()='Voľby spustené.']", by = By.XPATH)
 
 
     def test_select_none (self):
@@ -138,8 +189,22 @@ class VotingTest (unittest.TestCase):
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        # Activate token
+        response = requests.post(GATEWAY_URL + 'token-manager-api/tokens/writer/update', json = {"token": token})
+        self.passing = self.assertEqual(200, response.status_code)
+
+        # Wait for FE to be ready
+        time.sleep(20)
+        driver.get(VT_FRONTEND_URL)
+        find_element(driver, "//div[text()='Načítajte NFC tag']", by = By.XPATH)
+
+        # Use token
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -164,7 +229,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1
@@ -195,27 +260,36 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Check server statistics
-        response = requests.get(SERVER_URL + "elastic/elections-status")
+        response = requests.get(SERVER_URL + "elastic/synchronization-status")
         election_status = response.json()
 
-        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+        # There is +1 vote in server because of initial seed
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count + 1)
 
         # Do elastic search synchronize
         response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
         synchronize_response = response.json()
 
-        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
+        self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
 
 
-    def test_selecting_party_only (self):
+    def test_select_party_only (self):
         global all_votes_count
         global synchronized_votes_count
         global unsynchronized_votes_count
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        # Activate token
+        response = requests.post(GATEWAY_URL + 'token-manager-api/tokens/writer/update', json = {"token": token})
+        self.passing = self.assertEqual(200, response.status_code)
+
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -239,7 +313,7 @@ class VotingTest (unittest.TestCase):
         # List of candidates present
         find_element(driver, "//h2[text()='Kandidáti']", by = By.XPATH)
         find_element(driver, "//span[text()='Meno']", by = By.XPATH)
-        self.assertTrue(is_text_present(driver, "1. Boris Kollár"))
+        self.assertTrue(is_text_present(driver, "Boris Kollár"))
 
         # Decide for no candidate
         element = find_clickable_element(driver, "//button[text()='Potvrdiť']", by = By.XPATH)
@@ -259,7 +333,7 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1
@@ -290,27 +364,36 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Check server statistics
-        response = requests.get(SERVER_URL + "elastic/elections-status")
+        response = requests.get(SERVER_URL + "elastic/synchronization-status")
         election_status = response.json()
 
-        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+        # There is +1 vote in server because of initial seed
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count + 1)
 
         # Do elastic search synchronize
         response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
         synchronize_response = response.json()
 
-        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
+        self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
 
 
-    def test_selecting_party_and_candidates (self):
+    def test_select_party_and_candidates (self):
         global all_votes_count
         global synchronized_votes_count
         global unsynchronized_votes_count
 
         driver = self.driver
 
-        # Send validated token
-        response = requests.get(VT_BACKEND_URL + "/test_token_valid")
+        # Get token
+        response = requests.post(GATEWAY_URL + "token-manager-api/tokens/create")
+        self.passing = self.assertEqual(200, response.status_code)
+        token = response.json()["token"]
+
+        # Activate token
+        response = requests.post(GATEWAY_URL + 'token-manager-api/tokens/writer/update', json = {"token": token})
+        self.passing = self.assertEqual(200, response.status_code)
+
+        response = requests.post(VT_BACKEND_URL + "token", json = token)
         self.passing = self.assertEqual(200, response.status_code)
 
         # Get candidating parties
@@ -334,7 +417,7 @@ class VotingTest (unittest.TestCase):
         # List of candidates present
         find_element(driver, "//h2[text()='Kandidáti']", by = By.XPATH)
         find_element(driver, "//span[text()='Meno']", by = By.XPATH)
-        self.assertTrue(is_text_present(driver, "1. Boris Kollár"))
+        self.assertTrue(is_text_present(driver, "Boris Kollár"))
 
         # Select candidates
         element = find_clickable_element(driver, "(//input[@type='checkbox'])[1]", by = By.XPATH)
@@ -345,12 +428,12 @@ class VotingTest (unittest.TestCase):
         element = find_clickable_element(driver, "next")
         click_on(driver, element)
 
-        self.assertTrue(is_text_present(driver, "11. Ľuboš Krajčír"))
+        self.assertTrue(is_text_present(driver, "Ľuboš Krajčír"))
 
         element = find_clickable_element(driver, "next")
         click_on(driver, element)
 
-        self.assertTrue(is_text_present(driver, "21. Jozef Mozol"))
+        self.assertTrue(is_text_present(driver, "Jozef Mozol"))
         element = find_clickable_element(driver, "(//input[@type='checkbox'])[1]", by = By.XPATH)
         click_on(driver, element)
 
@@ -361,8 +444,8 @@ class VotingTest (unittest.TestCase):
 
         # Confirm selected candidates
         self.assertTrue(is_text_present(driver, "Zvolili ste"))
-        self.assertTrue(is_text_present(driver, "1. Boris Kollár"))
-        self.assertTrue(is_text_present(driver, "21. Jozef Mozol"))
+        self.assertTrue(is_text_present(driver, "Boris Kollár"))
+        self.assertTrue(is_text_present(driver, "Jozef Mozol"))
         self.assertTrue(is_text_present(driver, "Ešte môžete zvoliť ďalších 3 kandidátov"))
         element = find_clickable_element(driver, "//button[text()='Pokračovať']", by = By.XPATH)
         click_on(driver, element)
@@ -370,14 +453,14 @@ class VotingTest (unittest.TestCase):
         find_element(driver, "//h2[text()='Zvolená strana']", by = By.XPATH)
         self.assertTrue(is_text_present(driver, "SME RODINA"))
         self.assertTrue(is_text_present(driver, "Zvolení kandidáti na poslancov"))
-        self.assertTrue(is_text_present(driver, "1. Boris Kollár"))
-        self.assertTrue(is_text_present(driver, "21. Jozef Mozol"))
+        self.assertTrue(is_text_present(driver, "Boris Kollár"))
+        self.assertTrue(is_text_present(driver, "Jozef Mozol"))
 
         # Send vote
         element = find_clickable_element(driver, "//button[text()='Odoslať hlas']", by = By.XPATH)
         click_on(driver, element)
 
-        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH)
+        find_element(driver, "//div[text()='Váš hlas bol započítaný']", by = By.XPATH, longDelay = True)
 
         all_votes_count += 1
         unsynchronized_votes_count += 1
@@ -408,22 +491,25 @@ class VotingTest (unittest.TestCase):
         self.assertTrue(statistics_result["statistics"]["unsyncronized_count"] == unsynchronized_votes_count)
 
         # Check server statistics
-        response = requests.get(SERVER_URL + "elastic/elections-status")
+        response = requests.get(SERVER_URL + "elastic/synchronization-status")
         self.assertEqual(200, response.status_code)
         election_status = response.json()
 
-        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count)
+        # There is +1 vote in server because of initial seed
+        self.assertTrue(election_status["data"]["total_votes"] == all_votes_count + 1)
 
         # Do elastic search synchronize
         response = requests.post(SERVER_URL + "elastic/synchronize-votes-es", json = {"number": 100})
         self.assertEqual(200, response.status_code)
         synchronize_response = response.json()
 
-        self.assertTrue(synchronize_response["message"] == SYNCHRONIZATION_MESSAGE)
+        self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
 
 
     def tearDown (self):
         self.driver.close()
+
+
 
 if __name__ == "__main__":
     # Exit if any fail
