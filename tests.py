@@ -32,16 +32,18 @@ VT_BACKEND_URL = os.getenv("VT_URL") + "backend/"
 GATEWAY_URL = os.getenv("GATEWAY_URL")
 GATEWAY_ADMIN_URL = os.getenv("GATEWAY_URL") + "admin-frontend/"
 SERVER_URL = os.getenv("SERVER_URL")
+STATISTICS_URL = os.getenv("STATISTICS_URL")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 SYNCHRONIZATION_MESSAGE = "votes were successfully synchronized"
 
 elections_on = False
 vt_registration_on = False
+statistics_published = False
 
 all_votes_count = 0
 synchronized_votes_count = 0
 unsynchronized_votes_count = 0
-
 
 
 def set_up_server ():
@@ -53,7 +55,6 @@ def set_up_server ():
 
     # Set up elastic
     response = requests.post(SERVER_URL + "elastic/setup-elastic-vote-index")
-
 
 
 class ServicesAvailabityTest (unittest.TestCase):
@@ -95,6 +96,12 @@ class ServicesAvailabityTest (unittest.TestCase):
         # Set up server if everything OK
         set_up_server()
 
+    def test_statistics_app_available (self):
+        try:
+            response = requests.get(STATISTICS_URL)
+            self.passing = self.assertEqual(200, response.status_code)
+        except requests.exceptions.HTTPError as e:
+            raise SystemExit("STATISTICS APP not available!")
 
 
 class VotingTest (unittest.TestCase):
@@ -103,6 +110,7 @@ class VotingTest (unittest.TestCase):
     def setUp (self):
         global vt_registration_on
         global elections_on
+        global statistics_published
 
         self.driver = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = driver_options)
 
@@ -114,6 +122,9 @@ class VotingTest (unittest.TestCase):
             self.turn_on_elections_if_not_on()
             elections_on = True
 
+        if not statistics_published:
+            self.publish_statistics()
+            statistics_published = True
 
     def enter_gateway_pin (self):
         driver = self.driver
@@ -180,6 +191,44 @@ class VotingTest (unittest.TestCase):
             click_on(driver, element)
 
         find_element(driver, "//div[text()='Voľby spustené.']", by = By.XPATH)
+
+    def publish_statistics (self):
+        driver = self.driver
+
+        driver.get(STATISTICS_URL)
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Check if statistics are hidden
+        self.assertTrue(is_text_present(driver, "Výsledky ešte neboli publikované"))
+
+        driver.get(STATISTICS_URL + "admin/home")
+        find_element(driver, "//main", by = By.XPATH)
+
+        element = find_element(driver, "name", by = By.ID)
+        element.send_keys("admin")
+
+        element = find_element(driver, "password", by = By.ID)
+        element.send_keys(ADMIN_PASSWORD)
+
+        element = find_clickable_element(driver, "//button[text()='Prihlásiť']", by = By.XPATH)
+        click_on(driver, element)
+
+        find_element(driver, "//h1[text()='Administrácia']", by = By.XPATH)
+        find_element(driver, "//div[text()='Výsledky nepublikované.']", by = By.XPATH)
+
+        # Publish results
+        element = find_clickable_element(driver, "//button[text()='Publikovať výsledky']", by = By.XPATH)
+        click_on(driver, element)
+
+        find_element(driver, "//main", by = By.XPATH)
+        find_element(driver, "//div[text()='Výsledky publikované.']", by = By.XPATH)
+        self.assertTrue(is_text_present(driver, "Výsledky publikované"))
+
+        driver.get(STATISTICS_URL)
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Check if statistics are hidden
+        self.assertFalse(is_text_present(driver, "Výsledky ešte neboli publikované"))
 
 
     def test_select_none (self):
@@ -271,6 +320,13 @@ class VotingTest (unittest.TestCase):
         synchronize_response = response.json()
 
         self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
+
+        # Check votes in statistics app
+        driver.get(STATISTICS_URL)
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Check count of all votes
+        find_element(driver, "//div[contains(@class, 'elections-statistics')]//tbody[//th[text() = 'Počet hlasov spolu:'] and //td[text() = '%s']]" % str(all_votes_count + 1), by = By.XPATH)
 
 
     def test_select_party_only (self):
@@ -375,6 +431,16 @@ class VotingTest (unittest.TestCase):
         synchronize_response = response.json()
 
         self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
+
+        # Check votes in statistics app
+        driver.get(STATISTICS_URL)
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Check count of all votes
+        find_element(driver, "//div[contains(@class, 'elections-statistics')]//tbody[//th[text() = 'Počet hlasov spolu:'] and //td[text() = '%s']]" % str(all_votes_count + 1), by = By.XPATH)
+
+        # Check if SME RODINA gets votes in Bratislavsky kraj
+        find_element(driver, "//section[contains(@class, 'regional-winners-cards')]/div/div/div[//span[text() = 'Bratislavský kraj'] and //div[text() = 'SME RODINA']]", by = By.XPATH, longDelay = True)
 
 
     def test_select_party_and_candidates (self):
@@ -505,10 +571,22 @@ class VotingTest (unittest.TestCase):
 
         self.assertTrue(SYNCHRONIZATION_MESSAGE in synchronize_response["message"])
 
+        # Check statistics app
+        driver.get(STATISTICS_URL)
+        find_element(driver, "//main", by = By.XPATH)
+
+        # Check count of all votes
+        find_element(driver, "//div[contains(@class, 'elections-statistics')]//tbody[//th[text() = 'Počet hlasov spolu:'] and //td[text() = '%s']]" % str(all_votes_count + 1), by = By.XPATH)
+
+        # Check if SME RODINA gets votes
+        find_element(driver, "//section[contains(@class, 'regional-winners-cards')]/div/div/div[//span[text() = 'Bratislavský kraj'] and //div[text() = 'SME RODINA']]", by = By.XPATH, longDelay=True)
+
+        # Check if selected candidates get votes
+        find_element(driver, "//div[contains(@class, 'candidates-table')]/div/div[//td[text() = 'Mgr. Boris Kollár'] and //td[text() = 'Mgr. Jozef Mozol']]", by = By.XPATH, longDelay=True)
+
 
     def tearDown (self):
         self.driver.close()
-
 
 
 if __name__ == "__main__":

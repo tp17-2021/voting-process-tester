@@ -17,7 +17,7 @@ def click_on (driver, element):
 
 def find_element (driver, identifier, by = By.CLASS_NAME, longDelay = False):
     delay = PAGE_LONG_LOAD_DELAY if longDelay else PAGE_LOAD_DELAY
-    WebDriverWait(driver, delay).until(EC.presence_of_element_located((by, identifier)))
+    return WebDriverWait(driver, delay).until(EC.presence_of_element_located((by, identifier)))
 
 def find_clickable_element (driver, identifier, by = By.CLASS_NAME):
     return WebDriverWait(driver, PAGE_LOAD_DELAY).until(EC.element_to_be_clickable((by, identifier)))
